@@ -32,7 +32,6 @@ export const MediaFrame: React.FC<{
 	autoplay?: boolean;
 }> = ({ mediaLink, ytRef, initSeconds, autoplay }) => {
 	const videoId = getVideoId(mediaLink);
-	if (!videoId) return null;
 	const opts: YouTubeProps["opts"] = {
 		playerVars: {
 			// this needs to be not undefined to work
@@ -47,7 +46,10 @@ export const MediaFrame: React.FC<{
 	const [currentTimestamp, setCurrentTimestamp] = React.useState<number>(0);
 
 	// Calculate the width of the progress bar as a percentage
-	const progressBarWidth = (currentTimestamp / maxTime) * 100;
+	const progressBarWidth =
+		maxTime > 0
+			? Math.min(Math.max((currentTimestamp / maxTime) * 100, 0), 100)
+			: 0;
 
 	// create a ref to store the setInterval function
 	const intervalRef = React.useRef<number | null>(null);
@@ -72,6 +74,10 @@ export const MediaFrame: React.FC<{
 			// if it was paused and now playing, set the current timestamp and making a polling setTimeout to check the player's current time and set the current timestamp every 1s
 			if (state === 1) {
 				updateTimestamp();
+				// clear any previous polling interval, e.g. after buffering
+				if (intervalRef.current) {
+					window.clearInterval(intervalRef.current);
+				}
 				const interval = window.setInterval(() => {
 					updateTimestamp();
 				}, 1000);
@@ -81,6 +87,7 @@ export const MediaFrame: React.FC<{
 			// if it was playing and is now paused, remove the polling interval and set
 			if ((state === 2 || state === 0) && intervalRef.current) {
 				window.clearInterval(intervalRef.current);
+				intervalRef.current = null;
 				setHideProgressBar(true);
 			}
 		};
@@ -108,6 +115,8 @@ export const MediaFrame: React.FC<{
 	const playRef = React.useRef(null);
 	const pauseRef = React.useRef(null);
 	const speedRef = React.useRef(null);
+
+	if (!videoId) return null;
 
 	return (
 		<div className="media-top-container">
