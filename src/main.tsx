@@ -294,7 +294,7 @@ export default class MediaNotesPlugin extends Plugin {
 				if (!player || !player.ytRef) return;
 				const timestamp =
 					await player.ytRef.current?.internalPlayer?.getCurrentTime();
-				if (!timestamp) return;
+				if (typeof timestamp !== "number") return;
 				const offsetTimestamp =
 					timestamp - this.settings.timestampOffsetSeconds >= 0
 						? timestamp - this.settings.timestampOffsetSeconds
@@ -308,18 +308,17 @@ export default class MediaNotesPlugin extends Plugin {
 				const videoUrl =
 					await player.ytRef.current?.internalPlayer?.getVideoUrl();
 
-				if (videoUrl) {
-					// for some reason, the t= param is wrong in the videoUrl from getVidelUrl. fix it
-					const fixedVideoUrl = new URL(videoUrl);
-					fixedVideoUrl.searchParams.set(
-						"t",
-						Math.floor(offsetTimestamp).toString()
-					);
-					timestampSnippet = timestampSnippet.replace(
-						"{link}",
-						`${fixedVideoUrl}`
-					);
-				}
+				// for some reason, the t= param is wrong in the videoUrl from getVidelUrl. fix it
+				// fall back to the note's media link (already validated) if there's no video url
+				const fixedVideoUrl = new URL(videoUrl || player.mediaLink);
+				fixedVideoUrl.searchParams.set(
+					"t",
+					Math.floor(offsetTimestamp).toString()
+				);
+				timestampSnippet = timestampSnippet.replace(
+					"{link}",
+					`${fixedVideoUrl}`
+				);
 				timestampSnippet = timestampSnippet.replace(/\\n/g, "\n");
 				editor.replaceSelection(timestampSnippet);
 				if (this.settings.pauseOnTimestampInsert) {
@@ -403,7 +402,7 @@ export default class MediaNotesPlugin extends Plugin {
 				if (!player || !player.ytRef) return;
 				const currentTime =
 					await player.ytRef.current?.internalPlayer?.getCurrentTime();
-				if (!currentTime) return;
+				if (typeof currentTime !== "number") return;
 				const newTime = currentTime + this.settings.seekSeconds;
 				player.ytRef.current
 					?.getInternalPlayer()
@@ -422,8 +421,11 @@ export default class MediaNotesPlugin extends Plugin {
 				if (!player || !player.ytRef) return;
 				const currentTime =
 					await player.ytRef.current?.internalPlayer?.getCurrentTime();
-				if (!currentTime) return;
-				const newTime = currentTime - this.settings.seekSeconds;
+				if (typeof currentTime !== "number") return;
+				const newTime = Math.max(
+					currentTime - this.settings.seekSeconds,
+					0
+				);
 				player.ytRef.current
 					?.getInternalPlayer()
 					?.seekTo(newTime, true);
