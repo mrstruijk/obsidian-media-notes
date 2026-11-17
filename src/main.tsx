@@ -516,23 +516,22 @@ export default class MediaNotesPlugin extends Plugin {
 					Object.keys(this.players).forEach((id) => {
 						this.savePlayerTimestamp(id);
 					});
-					return;
 				}
-				this.renderPlayerInView(markdownView);
+				this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+					if (!(leaf.view instanceof MarkdownView)) return;
+					this.renderPlayerInView(leaf.view);
+				});
 			})
 		);
 
 		this.registerEvent(
 			this.app.metadataCache.on("changed", (file) => {
-				const frontmatter =
-					this.app.metadataCache.getFileCache(file)?.frontmatter;
-				if (frontmatter && getMediaLinkFromFrontmatter(frontmatter)) {
-					// technically this may not be the same view as the file that changed
-					const markdownView =
-						this.app.workspace.getActiveViewOfType(MarkdownView);
-					if (!markdownView) return;
-					this.renderPlayerInView(markdownView);
-				}
+				// re-render the views of the changed file, which also cleans up if the media link was removed
+				this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+					if (!(leaf.view instanceof MarkdownView)) return;
+					if (leaf.view.file !== file) return;
+					this.renderPlayerInView(leaf.view);
+				});
 			})
 		);
 
