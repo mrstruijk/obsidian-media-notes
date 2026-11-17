@@ -378,7 +378,6 @@ export default class MediaNotesPlugin extends Plugin {
 			editorCallback: async (editor: Editor, view: MarkdownView) => {
 				const player = this.getActiveViewYoutubePlayer(view);
 				if (!player || !player.ytRef) return;
-				console.log("toggle horizontal view");
 				const container = view.containerEl;
 				const existingPlayer = view.containerEl.querySelector(
 					"." + mediaNotesContainerClass
@@ -601,7 +600,7 @@ class SettingsTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Default split view")
 			.setDesc(
-				"Vertical or horizontal split view. Defaults to horizontal."
+				"Vertical or horizontal split view. Defaults to vertical."
 			)
 			.addDropdown((dropdown) => {
 				dropdown
