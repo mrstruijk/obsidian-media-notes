@@ -119,6 +119,7 @@ export default class MediaNotesPlugin extends Plugin {
 		player.ytRef.current?.internalPlayer
 			?.getCurrentTime()
 			.then((timestamp: number) => {
+				if (typeof timestamp !== "number") return;
 				const mediaId = getVideoId(player.mediaLink);
 				if (!mediaId) return;
 				this.settings.mediaData[mediaId] = {
@@ -126,8 +127,10 @@ export default class MediaNotesPlugin extends Plugin {
 					lastUpdated: new Date().toISOString(),
 					lastTimestampSeconds: timestamp,
 				};
-				this.saveSettings();
-				this.loadSettings();
+				return this.saveSettings();
+			})
+			.catch((error: unknown) => {
+				console.error("Media Notes: failed to save timestamp", error);
 			});
 	};
 
@@ -551,9 +554,11 @@ export default class MediaNotesPlugin extends Plugin {
 	}
 
 	async loadSettings() {
+		// mediaData gets its own object so DEFAULT_SETTINGS is never mutated
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
+			{ mediaData: {} },
 			await this.loadData()
 		);
 	}
