@@ -5,8 +5,24 @@ import YouTube, { YouTubeEvent, YouTubeProps } from "react-youtube";
 import { CSSTransition } from "react-transition-group";
 
 export const getVideoId = (url: string) => {
-	const urlParams = new URLSearchParams(new URL(url).search);
-	return urlParams.get("v");
+	let parsedUrl: URL;
+	try {
+		parsedUrl = new URL(url);
+	} catch (e) {
+		return null;
+	}
+	const urlParams = new URLSearchParams(parsedUrl.search);
+	const videoId = urlParams.get("v");
+	if (videoId) return videoId;
+	// youtu.be/<id>
+	if (parsedUrl.hostname === "youtu.be") {
+		return parsedUrl.pathname.split("/")[1] || null;
+	}
+	// /shorts/<id>, /embed/<id>, /live/<id>
+	const pathMatch = parsedUrl.pathname.match(
+		/^\/(?:shorts|embed|live)\/([^/]+)/
+	);
+	return pathMatch ? pathMatch[1] : null;
 };
 
 export const MediaFrame: React.FC<{
