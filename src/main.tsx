@@ -1,4 +1,4 @@
-import { createRoot } from "react-dom/client";
+import { createRoot, Root } from "react-dom/client";
 import { MediaFrame, getVideoId } from "./components/media-frame";
 import { AppProvider } from "./app-context";
 import {
@@ -95,6 +95,7 @@ export default class MediaNotesPlugin extends Plugin {
 			ytRef: React.RefObject<YouTube>;
 			mediaLink: string;
 			eventEmitter: EventEmitter;
+			root: Root;
 		};
 	};
 
@@ -130,6 +131,26 @@ export default class MediaNotesPlugin extends Plugin {
 			});
 	};
 
+	// saves the timestamp, then unmounts the player and removes its container
+	destroyPlayer = (playerId: string, playerContainer: Element) => {
+		// savePlayerTimestamp requests the current time before the player is unmounted
+		this.savePlayerTimestamp(playerId);
+		this.players[playerId]?.root.unmount();
+		delete this.players[playerId];
+		playerContainer.remove();
+	};
+
+	// removes the player from a view (if any) and resets the split layout
+	removePlayerFromView = (markdownView: MarkdownView) => {
+		const container = markdownView.containerEl;
+		const div = container.querySelector("." + mediaNotesContainerClass);
+		if (div) {
+			const playerId = div.getAttribute("data-player-id") ?? "";
+			this.destroyPlayer(playerId, div);
+		}
+		container.classList.remove(mediaParentContainerVerticalClass);
+	};
+
 	renderPlayerInView = (markdownView: MarkdownView) => {
 		let frontmatter: Record<string, string> = {};
 		try {
@@ -163,9 +184,7 @@ export default class MediaNotesPlugin extends Plugin {
 					return;
 				}
 				// remove the existing player
-				existingPlayerComponent.remove();
-				this.savePlayerTimestamp(playerId);
-				delete this.players[playerId];
+				this.destroyPlayer(playerId, existingPlayerComponent);
 			}
 
 			const div = document.createElement("div");
@@ -189,10 +208,12 @@ export default class MediaNotesPlugin extends Plugin {
 
 			const ytRef = React.createRef<YouTube>();
 			const eventEmitter = new EventEmitter();
+			const root = createRoot(div);
 			this.players[uniqueId] = {
 				ytRef,
 				mediaLink: mediaLink,
 				eventEmitter,
+				root,
 			};
 
 			const mediaData =
@@ -212,7 +233,6 @@ export default class MediaNotesPlugin extends Plugin {
 				autoplay = true;
 			}
 
-			const root = createRoot(div);
 			root.render(
 				<>
 					<AppProvider
@@ -229,17 +249,8 @@ export default class MediaNotesPlugin extends Plugin {
 				</>
 			);
 		} else {
-			// if there's no media_link, cleanup
-			const container = markdownView.containerEl;
-			// cleanup existing players, and save timestamp
-			const div = container.querySelector("." + mediaNotesContainerClass);
-			if (div) {
-				// unmount
-				const playerId = div.getAttribute("data-player-id") ?? "";
-				this.savePlayerTimestamp(playerId);
-				delete this.players[playerId];
-				div.remove();
-			}
+			// if there's no media_link, cleanup existing players, and save timestamp
+			this.removePlayerFromView(markdownView);
 		}
 	};
 
@@ -527,21 +538,16 @@ export default class MediaNotesPlugin extends Plugin {
 	}
 
 	onunload() {
-		// if there's an active view, save the timestamp (for development hot reloading)
-		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		if (!activeView) return;
-		const container = activeView.containerEl;
-
-		// cleanup existing players, and save timestamp
-		const div = container.querySelector("." + mediaNotesContainerClass);
-		if (div) {
-			// unmount
-			const playerId = div.getAttribute("data-player-id") ?? "";
-			console.log("save timestamp before reloading!");
-			this.savePlayerTimestamp(playerId);
-			delete this.players[playerId];
-			div.remove();
-		}
+		// cleanup the players in all views, and save their timestamps (also for development hot reloading)
+		this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+			if (!(leaf.view instanceof MarkdownView)) return;
+			this.removePlayerFromView(leaf.view);
+		});
+		// unmount any players whose view is already gone
+		Object.values(this.players ?? {}).forEach((player) => {
+			player.root.unmount();
+		});
+		this.players = {};
 	}
 
 	async loadSettings() {
