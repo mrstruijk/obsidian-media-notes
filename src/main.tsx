@@ -131,12 +131,24 @@ export default class MediaNotesPlugin extends Plugin {
 	};
 
 	renderPlayerInView = (markdownView: MarkdownView) => {
-		// @ts-ignore TS2339
-		const frontmatter = (parseYaml(markdownView.rawFrontmatter) ??
-			{}) as Record<string, string>;
+		let frontmatter: Record<string, string> = {};
+		try {
+			// @ts-ignore TS2339
+			frontmatter = (parseYaml(markdownView.rawFrontmatter) ??
+				{}) as Record<string, string>;
+		} catch (e) {
+			// malformed frontmatter yaml, treat as no media link
+		}
+		const mediaLink = getMediaLinkFromFrontmatter(frontmatter);
+		// an invalid media link (not a url, not a string, no video id) is treated as no media link
+		const mediaId =
+			typeof mediaLink === "string" ? getVideoId(mediaLink) : null;
+		const container = markdownView.containerEl;
+		const markdownSourceview = container.querySelector(
+			".markdown-source-view"
+		);
 		// if there's a media_link
-		if (frontmatter && getMediaLinkFromFrontmatter(frontmatter)) {
-			const container = markdownView.containerEl;
+		if (mediaId && markdownSourceview) {
 			const existingPlayerComponent = container.querySelector(
 				"." + mediaNotesContainerClass
 			);
@@ -147,11 +159,7 @@ export default class MediaNotesPlugin extends Plugin {
 					"";
 				const player = this.players[playerId];
 				// If a player state object exists for this media link, don't re-render
-				if (
-					player &&
-					player.mediaLink ===
-						getMediaLinkFromFrontmatter(frontmatter)
-				) {
+				if (player && player.mediaLink === mediaLink) {
 					return;
 				}
 				// remove the existing player
@@ -169,9 +177,6 @@ export default class MediaNotesPlugin extends Plugin {
 			// name is important - matches data-player-id in getActiveViewYoutubePlayer
 			div.dataset.playerId = uniqueId;
 			div.style.background = this.settings.backgroundColor;
-			const markdownSourceview = container.querySelector(
-				".markdown-source-view"
-			);
 			if (this.settings.defaultSplitMode === "Vertical") {
 				div.style.width = this.settings.horizontalPlayerWidth + "%";
 				container.classList.add(mediaParentContainerVerticalClass);
@@ -180,10 +185,8 @@ export default class MediaNotesPlugin extends Plugin {
 				div.style.height = this.settings.verticalPlayerHeight + "%";
 			}
 
-			if (!markdownSourceview) return;
 			markdownSourceview.prepend(div);
 
-			const mediaLink = getMediaLinkFromFrontmatter(frontmatter);
 			const ytRef = React.createRef<YouTube>();
 			const eventEmitter = new EventEmitter();
 			this.players[uniqueId] = {
@@ -192,7 +195,6 @@ export default class MediaNotesPlugin extends Plugin {
 				eventEmitter,
 			};
 
-			const mediaId = getVideoId(mediaLink);
 			const mediaData =
 				(mediaId && this.settings.mediaData[mediaId]) ||
 				this.settings.mediaData[mediaLink];
@@ -264,8 +266,9 @@ export default class MediaNotesPlugin extends Plugin {
 		this.players = {};
 
 		this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
-			const view = leaf.view as MarkdownView;
-			this.renderPlayerInView(view);
+			// deferred views (Obsidian 1.7.2+) are not MarkdownViews yet
+			if (!(leaf.view instanceof MarkdownView)) return;
+			this.renderPlayerInView(leaf.view);
 		});
 
 		// This adds a simple command that can be triggered anywhere
