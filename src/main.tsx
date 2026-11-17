@@ -87,6 +87,19 @@ const getMediaLinkFromFrontmatter = (frontmatter: Record<string, string>) => {
 	return frontmatter["media_link"] || frontmatter["media"];
 };
 
+// parses a url t= param ("90", "90s", "1m30s", "1h2m3s") into seconds, null if invalid
+const parseTimeParam = (t: string | null) => {
+	if (!t) return null;
+	if (/^\d+(\.\d+)?$/.test(t)) return Number(t);
+	const match = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+	if (!match || !(match[1] || match[2] || match[3])) return null;
+	return (
+		Number(match[1] ?? 0) * 3600 +
+		Number(match[2] ?? 0) * 60 +
+		Number(match[3] ?? 0)
+	);
+};
+
 export default class MediaNotesPlugin extends Plugin {
 	settings: MediaNotesPluginSettings;
 
@@ -226,13 +239,13 @@ export default class MediaNotesPlugin extends Plugin {
 			// extract the url param ts from the media link
 			const mediaLinkUrl = new URL(mediaLink);
 			const mediaLinkParams = new URLSearchParams(mediaLinkUrl.search);
-			const mediaLinkTs = mediaLinkParams.get("t");
+			const mediaLinkSeconds = parseTimeParam(mediaLinkParams.get("t"));
 			const initSeconds =
-				mediaData?.lastTimestampSeconds ?? mediaLinkTs ?? 0;
+				mediaData?.lastTimestampSeconds ?? mediaLinkSeconds ?? 0;
 
 			let autoplay = false;
 			// If the initial seconds came from the mediaLink, autoplay
-			if (mediaLinkTs && Number(initSeconds) === Number(mediaLinkTs)) {
+			if (mediaLinkSeconds !== null && initSeconds === mediaLinkSeconds) {
 				autoplay = true;
 			}
 
